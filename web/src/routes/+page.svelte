@@ -1,59 +1,39 @@
-<script>
-	import Counter from './Counter.svelte';
-	import welcome from '$lib/images/svelte-welcome.webp';
-	import welcome_fallback from '$lib/images/svelte-welcome.png';
+<script lang="ts">
+    import Button from "../components/button.svelte";
+
+    function handleClick() {
+        const audioCtx = new AudioContext();
+        const audio = new Audio("/someday-that-summer.wav");
+        const source = audioCtx.createMediaElementSource(audio);
+
+        const node = audioCtx.createAnalyser()
+        node.fftSize = 2 ** 7;
+        source.connect(node);
+
+        const dataArray = new Float32Array(node.fftSize);
+
+        function play() {
+            const bufferSource = audioCtx.createBuffer(2, audioCtx.sampleRate * 30, audioCtx.sampleRate);
+            node.getFloatTimeDomainData(dataArray);
+            bufferSource.copyToChannel(dataArray, 0, 0);
+            bufferSource.copyToChannel(dataArray, 1, 0);
+            const soundSource = audioCtx.createBufferSource();
+            soundSource.buffer = bufferSource;
+            soundSource.connect(audioCtx.destination);
+            soundSource.start(0);
+            console.log("Data", dataArray);
+            setTimeout(play, 5);
+        }
+
+        play();
+
+
+
+        audio.play();
+    }
 </script>
 
-<svelte:head>
-	<title>Home</title>
-	<meta name="description" content="Svelte demo app" />
-</svelte:head>
-
 <section>
-	<h1>
-		<span class="welcome">
-			<picture>
-				<source srcset={welcome} type="image/webp" />
-				<img src={welcome_fallback} alt="Welcome" />
-			</picture>
-		</span>
-
-		to your new<br />SvelteKit app
-	</h1>
-
-	<h2>
-		try editing <strong>src/routes/+page.svelte</strong>
-	</h2>
-
-	<Counter />
+    <Button on:click={handleClick}>Start</Button>
 </section>
 
-<style>
-	section {
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		align-items: center;
-		flex: 0.6;
-	}
-
-	h1 {
-		width: 100%;
-	}
-
-	.welcome {
-		display: block;
-		position: relative;
-		width: 100%;
-		height: 0;
-		padding: 0 0 calc(100% * 495 / 2048) 0;
-	}
-
-	.welcome img {
-		position: absolute;
-		width: 100%;
-		height: 100%;
-		top: 0;
-		display: block;
-	}
-</style>
