@@ -4,7 +4,7 @@ use websocket::{sync::Server, OwnedMessage};
 
 mod socket;
 
-use socket::{SocketManager, SocketMessage};
+use socket::SocketManager;
 
 
 fn main() {
@@ -14,7 +14,7 @@ fn main() {
     let sm = SocketManager::new();
 
     for request in server.filter_map(Result::ok) {
-        let sm_send_clone = sm.tx.clone();
+        let sm_clone = sm.clone();
 
         thread::spawn(move || {
             let client = request.use_protocol("kek").accept().unwrap();
@@ -24,17 +24,17 @@ fn main() {
             let (mut receiver, mut sender) = client.split().unwrap();
 
             sender.send_message(&OwnedMessage::Text(String::from("Hi"))).unwrap();
-            sm_send_clone
-                .send(SocketMessage::NewClient(sender))
-                .expect("Failed to add client");
+            let client_id = sm_clone.add_client(sender);
 
             for message in receiver.incoming_messages() {
                 let message = message.unwrap();
 
                 match message {
-                    OwnedMessage::Text(text) => {
+                    OwnedMessage::Binary(bin) => {
+                        sm_clone.send_all(OwnedMessage::Binary(bin), Some(client_id));
                     },
                     _ => {
+                        println!("Unsupported data type");
                     },
                 }
             }

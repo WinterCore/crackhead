@@ -1,6 +1,6 @@
 use std::{thread, sync::{mpsc::{self, Sender}, atomic::{AtomicUsize, Ordering}, Mutex, Arc}, collections::HashMap, net::TcpStream};
 
-use websocket::sync::Writer;
+use websocket::{sync::Writer, OwnedMessage};
 
 
 static COUNTER: AtomicUsize = AtomicUsize::new(1);
@@ -9,12 +9,13 @@ fn get_id() -> usize {
 }
 
 pub enum SocketMessage {
-    NewClient(Writer<TcpStream>),
+    NewClient(usize, Writer<TcpStream>),
 }
 
+#[derive(Clone)]
 pub struct SocketManager {
     clients: Arc<Mutex<HashMap<usize, Writer<TcpStream>>>>,
-    pub tx: Sender<SocketMessage>,
+    tx: Sender<SocketMessage>,
 }
 
 impl SocketManager {
@@ -27,8 +28,7 @@ impl SocketManager {
         thread::spawn(move || {
             for message in rx {
                 match message {
-                    SocketMessage::NewClient(client) => {
-                        let id = get_id();
+                    SocketMessage::NewClient(id, client) => {
 
                         thread_clients.lock().unwrap().insert(id, client);
                     },
@@ -40,6 +40,33 @@ impl SocketManager {
             clients,
             tx,
         }
+    }
+
+    pub fn add_client(&self, client: Writer<TcpStream>) -> usize {
+        let id = get_id();
+        self.tx
+            .send(SocketMessage::NewClient(id, client))
+            .expect("Failed to add client");
+
+        return id;
+    }
+
+    pub fn send_all(&self, message: OwnedMessage, except: Option<usize>) {
+        let mut clients = self.clients.lock().unwrap();
+        clients.iter_mut().for_each(|(id, sender)| {
+            if let Some(except_id) = except {
+                if except_id == *id {
+                    return;
+                }
+            }
+
+            let result = sender.send_message(&message);
+
+            if result.is_err() {
+                eprintln!("Failed to send message to {id:}");
+            }
+
+        });
     }
 
     pub fn clients(&self) -> Vec<usize> {
